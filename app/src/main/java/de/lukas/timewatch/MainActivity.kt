@@ -1,194 +1,182 @@
 package de.lukas.timewatch
 
 import android.Manifest
-import android.R
-import android.content.ContentValues
-import android.content.pm.PackageManager
-import android.os.AsyncTask
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-
-import de.lukas.timewatch.databinding.ActivityMainBinding
-import java.io.InputStream
-import java.text.SimpleDateFormat
-import java.util.*
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-
-
-/**
- * TimeWatch This Class let you activate the Camera and take a Photo
- *
- * @author      Lukas Nickel
- */
+import androidx.core.content.FileProvider
+import androidx.lifecycle.ViewModelProvider
+import com.bumptech.glide.GenericTransitionOptions.with
+import com.bumptech.glide.Glide
+import com.bumptech.glide.Glide.with
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.with
+import com.bumptech.glide.request.FutureTarget
+import kotlinx.android.synthetic.main.activity_main.*
+import com.gun0912.tedpermission.PermissionListener
+import com.gun0912.tedpermission.TedPermission
+import java.io.File
+import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var viewModel: CameraViewModel
 
-    private lateinit var viewBinding: ActivityMainBinding
-    private var imageCapture: ImageCapture? = null
-    private lateinit var cameraExecutor: ExecutorService
+    // file that store a captured image from camera
+    private var imageFile: File? = null
 
-    /**
-     * Function that requests the Camera Permissions on start
-     * @param savedInstanceState The active instance of the App
-     */
+    private val takePhoto = 111
+    private val takeGallery = 222
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        viewBinding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(viewBinding.root)
+        setContentView(R.layout.activity_main)
 
-        // Request camera permissions
-        if (allPermissionsGranted()) {
-            startCamera()
-        } else {
-            ActivityCompat.requestPermissions(
-                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS
-            )
+        // create a viewmodel
+        viewModel = ViewModelProvider(viewModelStore, CameraViewModelFactory(application)).get(
+            CameraViewModel::class.java)
+
+        tv_cta_camera.setOnClickListener {
+            checkCameraPermission(ImageType.CAMERA)
         }
-
-        // Set up the listeners for take photo and video capture buttons
-        viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
-        cameraExecutor = Executors.newSingleThreadExecutor()
-
-
-    }
-
-    /**
-     * Function to take a Photo
-     */
-    private fun takePhoto() {
-        // Get a stable reference of the modifiable image capture use case
-        val imageCapture = imageCapture ?: return
-
-        // Create time stamped name and MediaStore entry.
-        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.GERMANY)
-            .format(System.currentTimeMillis())
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/TimeWatch-Image")
-            }
+        tv_cta_gallery.setOnClickListener {
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                callGallery()
+            else
+                checkCameraPermission(ImageType.GALLERY)
         }
+    }
 
-        // Create output options object which contains file + metadata
-        val outputOptions = ImageCapture.OutputFileOptions
-            .Builder(contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues)
-            .build()
+    private fun callCamera() {
+        System.out.println("Call camera")
+        Intent(MediaStore.ACTION_IMAGE_CAPTURE).also { takePictureIntent ->
+            // Ensure that there's a camera activity to handle the intent
+            takePictureIntent.resolveActivity(packageManager)?.also {
+                // Launch camera app only when image file exists
+                System.out.println("Call camera2")
 
-        // Set up image capture listener, which is triggered after photo has
-        // been taken
-        imageCapture.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+                try {
+                    // create a file to contain photos to be taken with the camera
+                    imageFile = viewModel.createImageFile()
+
+                    val imageUri =
+                        FileProvider.getUriForFile(
+                            this,
+                            BuildConfig.APPLICATION_ID + ".provider",
+                            imageFile!!)
+
+                    // launch camera app
+                    takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, imageUri)
+                    startActivityForResult(takePictureIntent, takePhoto)
+
+                }catch (e:IOException) {
+                    imageFile = null
+                    Log.e("LOG>>", "IOException while creating file : $e")
+                }catch (e:Exception) {
+                    imageFile = null
+                    Log.e("LOG>>", "Exception while creating file : $e")
                 }
 
-                override fun
-                        onImageSaved(output: ImageCapture.OutputFileResults){
-                    val msg = "Photo capture succeeded: ${output.savedUri}"
-                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-                    Log.d(TAG, msg)
-                }
-            }
-        )
-    }
-
-    /**
-     * Start the Camera of the Phone
-     */
-    private fun startCamera() {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-
-        cameraProviderFuture.addListener({
-            // Used to bind the lifecycle of cameras to the lifecycle owner
-            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
-
-            // Preview
-            val preview = Preview.Builder()
-                .build()
-                .also {
-                    it.setSurfaceProvider(viewBinding.viewFinder.surfaceProvider)
-                }
-
-            // Select back camera as a default
-            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
-
-            try {
-                // Unbind use cases before rebinding
-                cameraProvider.unbindAll()
-
-                // Bind use cases to camera
-                cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview)
-
-            } catch(exc: Exception) {
-                Log.e(TAG, "Use case binding failed", exc)
-            }
-
-        }, ContextCompat.getMainExecutor(this))
-    }
-
-    /**
-     * Function to check if all Permissions are granted
-     */
-    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(
-            baseContext, it) == PackageManager.PERMISSION_GRANTED
-    }
-
-    /**
-     * Function to shutdown the camera on app close
-     */
-    override fun onDestroy() {
-        super.onDestroy()
-        cameraExecutor.shutdown()
-    }
-
-    companion object {
-        private const val TAG = "TimeWatch"
-        private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
-        private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS =
-            mutableListOf (
-                Manifest.permission.CAMERA,
-                Manifest.permission.RECORD_AUDIO
-            ).apply {
-                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                    add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                }
-            }.toTypedArray()
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<String>, grantResults:
-        IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_CODE_PERMISSIONS) {
-            if (allPermissionsGranted()) {
-                startCamera()
-            } else {
-                Toast.makeText(this,
-                    "Permissions not granted by the user.",
-                    Toast.LENGTH_SHORT).show()
-                finish()
             }
         }
     }
+
+    private fun callGallery() {
+        val intent = Intent()
+        intent.type = "image/*"
+        intent.action = Intent.ACTION_GET_CONTENT
+        startActivityForResult(intent, takeGallery)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        when(requestCode) {
+            // After taking a picture
+            takePhoto -> {
+                if(imageFile == null) {
+                    Log.e("LOG>>", "After taking a picture, imageFile null. ....")
+                    return
+                }
+                if(resultCode != RESULT_OK) {
+                    return
+                }
+
+                with(this).load(imageFile).into(iv_image)
+
+                if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    Thread(Runnable {
+                        // convert image file to bitmap using Glide
+                        // description : http://bumptech.github.io/glide/doc/getting-started.html#background-threads
+                        val futureTarget: FutureTarget<Bitmap> = with(this)
+                            .asBitmap()
+                            .load(imageFile)
+                            .submit()
+
+                        // save bitmap to gallery
+                        if(viewModel.savePhotoAndroidQ(futureTarget.get()) == null)
+                            runOnUiThread {
+                                Toast.makeText(this, "Failed to save image in gallery ...", Toast.LENGTH_SHORT).show()
+                            }
+
+                        // delete a temporary file stored in the internal storage
+                        viewModel.deleteImages(imageFile!!)
+
+                    }).start()
+                }
+                else
+                    // Notice that images have been added to the gallery
+                    viewModel.notifyGallery(imageFile!!)
+
+            }
+            // After selecting an image from gallery.
+            takeGallery -> {
+                if(resultCode == RESULT_OK) {
+                    // convert uri of user selected image to file
+                    val file = viewModel.createImageFileAndroidQ(uri = data?.data!!)
+                    with(this).load(file).into(iv_image)
+                }
+            }
+        }
+    }
+
+    /**
+     * Permission check. Use TedPermission library.
+     * */
+    private fun checkCameraPermission(type: ImageType) {
+        TedPermission.create()
+            .setPermissionListener(object : PermissionListener {
+                // Allow permissions
+                override fun onPermissionGranted() {
+                    when(type) {
+                        ImageType.CAMERA -> callCamera()
+                        ImageType.GALLERY -> callGallery()
+                    }
+                }
+                // Deny permissions
+                override fun onPermissionDenied(deniedPermissions: MutableList<String>?) {
+                }
+            })
+            .setDeniedMessage("Please allow permissions to use this app. \uD83D\uDE2D\uD83D\uDE2D")
+            .apply {
+                when(type){
+                    ImageType.CAMERA -> {
+                        // No storage permission required for accessing scoped storage from Android 10+
+                        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                            setPermissions(Manifest.permission.CAMERA)
+                        else
+                            setPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.CAMERA)
+                    }
+                    ImageType.GALLERY -> setPermissions(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+            }
+            .check()
+    }
+
 }
-
