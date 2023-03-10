@@ -72,14 +72,11 @@ public class CameraActivity extends AppCompatActivity implements TextInterfaces 
     private static final int REQUEST_WRITE_STORAGE = 112;
     private ProgressBar dialog;
 
-    //private ProgressDialog dialog;
-
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         dialog = findViewById(R.id.progressBar);
-        //dialog = new ProgressDialog(this);
 
         Vision.Builder visionBuilder = new Vision.Builder(
                 new NetHttpTransport(),
@@ -229,13 +226,6 @@ public class CameraActivity extends AppCompatActivity implements TextInterfaces 
         ArrayList<String> detectedText = new ArrayList<>();
         // loop responses
         for (AnnotateImageResponse res : responses) {
-           /* if (res.getError() != null) {
-                System.out.format("Error: %s%n", res.getError().getMessage());
-                return new ArrayList<>();
-            }*/
-
-            // filter text entities from response
-            //System.out.println(res.getFullTextAnnotation().getText());
             for (EntityAnnotation annotation : res.getTextAnnotations()) {
                 detectedText.add(annotation.getDescription());
             }
@@ -361,29 +351,5 @@ public class CameraActivity extends AppCompatActivity implements TextInterfaces 
                 //Toast.makeText(getApplicationContext(), createStopwatchTime(output), Toast.LENGTH_SHORT).show();
             }
         });
-    }
-
-    private void checkCameraPermission(ImageType imageType) {
-        TedPermission.create()
-                .setPermissionListener(new PermissionListener() {
-                    @Override
-                    public void onPermissionGranted() {
-                        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-
-                        switch (imageType) {
-                            case CAMERA:
-                                startActivityForResult(intent, 100);
-                                break;
-                            case GALLERY:
-                                callGallery();
-                                break;
-                        }
-                    }
-
-                    @Override
-                    public void onPermissionDenied(List<String> deniedPermissions) {
-
-                    }
-                }).setDeniedMessage("Please allow permissions to use this app. \uD83D\uDE2D\uD83D\uDE2D").check();
     }
 }
