@@ -6,36 +6,23 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="16dp"
-    tools:context=".MainActivity">
+    tools:context=".CameraActivity">
 
-    <TextView
+    <Button
         android:id="@+id/tv_cta_camera"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:background="@color/colorPrimary"
+        android:gravity="center"
+        android:padding="28dp"
         android:text="CAMERA"
         android:textColor="#ffffff"
-        android:gravity="center"
-        android:padding="28dp"
-        android:background="@color/colorPrimary"
-        android:layout_marginTop="24dp"
-        android:layout_marginEnd="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_chainStyle="spread"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toLeftOf="@id/tv_cta_gallery"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <TextView
-        android:id="@+id/tv_cta_gallery"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="GALLERY"
-        android:textColor="#ffffff"
-        android:gravity="center"
-        android:padding="28dp"
-        android:background="@color/colorPrimaryDark"
-        android:layout_marginTop="24dp"
-        app:layout_constraintLeft_toRightOf="@id/tv_cta_camera"
-        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintRight_toLeftOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <ImageView
@@ -47,7 +34,24 @@
         tools:background="@color/colorAccent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_cta_gallery"
+        app:layout_constraintTop_toBottomOf="@id/tv_cta_camera"
         app:layout_constraintBottom_toBottomOf="parent"/>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="#FFFFFF"
+        android:indeterminateTint="#673AB7"
+        android:paddingLeft="100px"
+        android:paddingTop="10px"
+        android:paddingRight="100px"
+        android:paddingBottom="10px"
+        android:visibility="invisible"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
